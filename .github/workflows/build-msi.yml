@@ -1,4 +1,5 @@
-name: Build MSI (WiX v3)
+
+name: Build MSI Installer
 
 on:
   push:
@@ -12,14 +13,13 @@ jobs:
     runs-on: windows-latest
 
     env:
-      # Choose a permanent UpgradeCode GUID (do not change across releases).
+      # Permanent UpgradeCode GUID (must remain constant across versions)
       UPGRADE_CODE: "{E3A1C4F5-1234-4B7D-9D2B-ABCD12345678}"
-      # Adjust the publish path if your solution layout differs.
-      PUBLISH_DIR: D:\a\SipCallerInfoApp\SipCallerInfoApp\src\SipCallerInfoApp\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish
       SOLUTION_PATH: .\SipCallerInfoApp\SipCallerInfoApp.sln
       CSPROJ_PATH: .\SipCallerInfoApp\src\SipCallerInfoApp\SipCallerInfoApp.csproj
       INSTALLER_DIR: D:\a\SipCallerInfoApp\SipCallerInfoApp\installer
       MSI_OUTPUT: D:\a\SipCallerInfoApp\SipCallerInfoApp\installer\SipCallerInfoApp.msi
+      PUBLISH_DIR: D:\a\SipCallerInfoApp\SipCallerInfoApp\src\SipCallerInfoApp\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish
 
     steps:
       - name: Checkout
@@ -56,12 +56,12 @@ jobs:
             -sfrag -srd -suid -sreg `
             -o "$env:INSTALLER_DIR\SipCallerInfoApp.Components.wxs"
 
-      - name: Validate UpgradeCode placeholder not present
+      - name: Validate UpgradeCode placeholder
         shell: pwsh
         run: |
           $wxs = Get-Content "$env:INSTALLER_DIR\SipCallerInfoApp.wxs" -Raw
           if ($wxs -match 'UpgradeCode="PUT-GUID-HERE"') {
-            Write-Error "UpgradeCode placeholder detected in SipCallerInfoApp.wxs. Replace with a permanent GUID or use Candle -d UpgradeCode."
+            Write-Error "UpgradeCode placeholder detected. Replace with a permanent GUID or use Candle -d UpgradeCode."
           }
 
       - name: Compile (candle)
@@ -88,4 +88,3 @@ jobs:
         with:
           name: SipCallerInfoApp-MSI
           path: ${{ env.MSI_OUTPUT }}
-          if-no-files-found: error
