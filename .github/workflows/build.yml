@@ -12,10 +12,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup .NET (8.x)
+      - name: Setup .NET (8.0.402)
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: '8.0.402'
+
+      - name: Verify SDK
+        run: dotnet --info
 
       - name: Restore
         run: dotnet restore src/SipCallerInfoApp/SipCallerInfoApp.csproj
@@ -43,14 +46,11 @@ jobs:
           $PublishDir = Resolve-Path "src/SipCallerInfoApp/bin/Release/net8.0-windows10.0.19041.0/win-x64/publish"
           $InstallerDir = Resolve-Path "installer"
 
-          # Harvest publish output into components
           heat dir $PublishDir -cg AppComponents -gg -sfrag -srd -dr INSTALLDIR -var var.PublishDir -out "$InstallerDir/SipCallerInfoApp.Components.wxs"
 
-          # Compile WiX sources
           $wxs = Join-Path $InstallerDir "SipCallerInfoApp.wxs"
           candle.exe -ext WixUIExtension -dPublishDir=$PublishDir "$InstallerDir/SipCallerInfoApp.Components.wxs" $wxs
 
-          # Link to produce MSI
           $objs = Get-ChildItem $InstallerDir -Filter '*.wixobj' | ForEach-Object { $_.FullName }
           light.exe -ext WixUIExtension -dPublishDir=$PublishDir -out "SipCallerInfoApp-1.0.0.msi" $objs
 
