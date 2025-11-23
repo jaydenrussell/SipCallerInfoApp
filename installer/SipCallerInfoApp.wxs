@@ -1,17 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-  <Product Id="*" Name="SIP Caller Info App" Language="1033" Version="1.0.0.0" Manufacturer="Jayden Russell" UpgradeCode="PUT-GUID-HERE">
-    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" />
-    <MajorUpgrade AllowDowngrades="no" DowngradeErrorMessage="A newer version of SIP Caller Info App is already installed." />
-    <MediaTemplate />
-    <Feature Id="MainFeature" Title="SIP Caller Info App" Level="1">
-      <ComponentGroupRef Id="AppComponents" />
-    </Feature>
-    <Directory Id="TARGETDIR" Name="SourceDir">
-      <Directory Id="ProgramFilesFolder">
-        <Directory Id="INSTALLDIR" Name="SipCallerInfoApp" />
-      </Directory>
-    </Directory>
-    <ComponentGroup Id="AppComponents" />
+  <Product Id="*"
+         Name="Sip Caller Info App"
+         Language="1033"
+         Version="1.0.0.0"
+         Manufacturer="Jayden Russell"
+         UpgradeCode="{E3A1C4F5-1234-4B7D-9D2B-ABCD12345678}">
+  <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" />
+  <MajorUpgrade Schedule="afterInstallInitialize"
+                AllowDowngrades="no"
+                DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+  …
   </Product>
+
 </Wix>
