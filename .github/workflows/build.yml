@@ -44,103 +44,95 @@ jobs:
           name: SipCallerInfoApp-EXE
           path: src/SipCallerInfoApp/bin/Release/net8.0-windows10.0.19041.0/win-x64/publish   
       
-      - name: Install WiX Toolset (v3)
+      
+name: Build MSI (WiX v3)
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-msi:
+    runs-on: windows-latest
+
+    env:
+      # Choose a permanent UpgradeCode GUID (do not change across releases).
+      UPGRADE_CODE: "{E3A1C4F5-1234-4B7D-9D2B-ABCD12345678}"
+      # Adjust the publish path if your solution layout differs.
+      PUBLISH_DIR: D:\a\SipCallerInfoApp\SipCallerInfoApp\src\SipCallerInfoApp\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish
+      SOLUTION_PATH: .\SipCallerInfoApp\SipCallerInfoApp.sln
+      CSPROJ_PATH: .\SipCallerInfoApp\src\SipCallerInfoApp\SipCallerInfoApp.csproj
+      INSTALLER_DIR: D:\a\SipCallerInfoApp\SipCallerInfoApp\installer
+      MSI_OUTPUT: D:\a\SipCallerInfoApp\SipCallerInfoApp\installer\SipCallerInfoApp.msi
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore & Publish (self-contained)
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
-          choco install wixtoolset -y --no-progress
+          dotnet restore $env:SOLUTION_PATH
+          dotnet publish $env:CSPROJ_PATH `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=false `
+            -p:IncludeNativeLibrariesForSelfExtract=false
 
-      - name: Resolve WiX tool paths and add to PATH
+      - name: Install WiX Toolset v3
+        uses: microsoft/setup-wix@v1
+        with:
+          wix-version: "3.14.1.8722"
+
+      - name: Harvest publish folder with Heat
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
-
-          # Try to locate WiX v3 under Program Files (x86) or Program Files
-          $candidateRoots = @("C:\Program Files (x86)", "C:\Program Files")
-          $wixBin = $null
-          foreach ($root in $candidateRoots) {
-            $dirs = Get-ChildItem $root -Filter "WiX Toolset v3*" -Directory -ErrorAction SilentlyContinue
-            if ($dirs) {
-              # Prefer latest version folder
-              $latest = $dirs | Sort-Object FullName -Descending | Select-Object -First 1
-              $testBin = Join-Path $latest.FullName "bin"
-              if (Test-Path (Join-Path $testBin "candle.exe")) {
-                $wixBin = $testBin
-                break
-              }
-            }
-          }
-
-          # Fallback: use Get-Command to locate tools if PATH or install differs
-          if (-not $wixBin) {
-            $candleCmd = Get-Command candle.exe -ErrorAction SilentlyContinue
-            if ($candleCmd) {
-              $wixBin = Split-Path $candleCmd.Source -Parent
-            }
-          }
-
-          if (-not $wixBin) {
-            throw "WiX v3 not found on runner. Check Chocolatey logs or runner image."
-          }
-
-          Write-Host "Using WiX bin: $wixBin"
-          $env:PATH = "$wixBin;$env:PATH"
-
-          # Verify the tools exist
-          foreach ($t in "heat.exe","candle.exe","light.exe") {
-            $resolved = Get-Command $t -ErrorAction SilentlyContinue
-            if (-not $resolved) { throw "Missing WiX tool '$t' in $wixBin or PATH." }
-            Write-Host "Found $t at $($resolved.Source)"
-          }
-          # Show version/help for sanity
-          & heat.exe -? | Out-String | Select-Object -First 1
-          & candle.exe -? | Out-String | Select-Object -First 1
-          & light.exe -? | Out-String | Select-Object -First 1
-
-      - name: Build MSI with WiX (harvest, compile, link)
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-
-          $PublishDir   = Resolve-Path "src/SipCallerInfoApp/bin/Release/net8.0-windows10.0.19041.0/win-x64/publish"
-          $InstallerDir = Resolve-Path "installer"
-          $DistDir      = Join-Path $InstallerDir "dist"
-          New-Item -ItemType Directory -Force -Path $DistDir | Out-Null
-
-          # Harvest publish output into ComponentGroup 'AppComponents'
-          heat.exe dir $PublishDir `
-            -cg AppComponents `
-            -gg `
-            -sfrag `
-            -srd `
-            -dr INSTALLDIR `
+          heat.exe dir "$env:PUBLISH_DIR" `
+            -cg SipCallerInfoAppComponents `
+            -dr INSTALLFOLDER `
             -var var.PublishDir `
-            -out "$InstallerDir/SipCallerInfoApp.Components.wxs"
+            -sfrag -srd -suid -sreg `
+            -o "$env:INSTALLER_DIR\SipCallerInfoApp.Components.wxs"
 
-          # Compile .wxs sources (include WixUIExtension if used in your .wxs)
-          $wxs = Join-Path $InstallerDir "SipCallerInfoApp.wxs"
-          candle.exe -ext WixUIExtension `
-            -dPublishDir=$PublishDir `
-            "$InstallerDir/SipCallerInfoApp.Components.wxs" $wxs
-
-          # Link to produce MSI under installer/dist
-          $objs = Get-ChildItem $InstallerDir -Filter '*.wixobj' | ForEach-Object { $_.FullName }
-          $msiOut  = Join-Path $DistDir "SipCallerInfoApp-1.0.0.msi"
-
-          light.exe -ext WixUIExtension `
-            -dPublishDir=$PublishDir `
-            -out $msiOut `
-            $objs
-
-          if (-not (Test-Path $msiOut)) {
-            throw "MSI not found at $msiOut. Inspect candle/light output above."
+      - name: Validate UpgradeCode placeholder not present
+        shell: pwsh
+        run: |
+          $wxs = Get-Content "$env:INSTALLER_DIR\SipCallerInfoApp.wxs" -Raw
+          if ($wxs -match 'UpgradeCode="PUT-GUID-HERE"') {
+            Write-Error "UpgradeCode placeholder detected in SipCallerInfoApp.wxs. Replace with a permanent GUID or use Candle -d UpgradeCode."
           }
 
-          Write-Host "MSI created: $msiOut"
-          Get-ChildItem $DistDir | Format-Table -AutoSize
+      - name: Compile (candle)
+        shell: pwsh
+        run: |
+          candle.exe `
+            -d PublishDir="$env:PUBLISH_DIR" `
+            -d UpgradeCode="$env:UPGRADE_CODE" `
+            "$env:INSTALLER_DIR\SipCallerInfoApp.wxs" `
+            "$env:INSTALLER_DIR\SipCallerInfoApp.Components.wxs"
 
-      - name: Upload MSI Artifact
+      - name: Link (light)
+        shell: pwsh
+        run: |
+          light.exe `
+            -ext WixUIExtension `
+            -cultures:en-us `
+            -out "$env:MSI_OUTPUT" `
+            "$env:INSTALLER_DIR\SipCallerInfoApp.wixobj" `
+            "$env:INSTALLER_DIR\SipCallerInfoApp.Components.wixobj"
+
+      - name: Upload MSI artifact
         uses: actions/upload-artifact@v4
         with:
           name: SipCallerInfoApp-MSI
-          path: installer/dist/SipCallerInfoApp-1.0.0.msi
+          path: ${{ env.MSI_OUTPUT }}
+          if-no-files-found: error
