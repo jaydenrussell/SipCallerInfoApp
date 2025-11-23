@@ -1,5 +1,5 @@
 
-name: Build MSI Installer (Auto-detect project)
+name: Build MSI Installer (WinUI 3, WiX v3)
 
 on:
   push:
@@ -11,95 +11,85 @@ on:
 jobs:
   build-msi:
     runs-on: windows-latest
-
     env:
-      # Permanent UpgradeCode GUID (keep constant across releases)
+      # Keep this GUID constant across releases
       UPGRADE_CODE: "{E3A1C4F5-1234-4B7D-9D2B-ABCD12345678}"
-      # Publish output folder inside the workspace (deterministic)
       PUBLISH_OUT: "${{ github.workspace }}\\publish-win-x64"
-      # Installer dir in repo (adjust if yours differs)
       INSTALLER_DIR: "${{ github.workspace }}\\SipCallerInfoApp\\installer"
-      # Final MSI output path
       MSI_OUTPUT: "${{ github.workspace }}\\SipCallerInfoApp\\installer\\SipCallerInfoApp.msi"
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Show workspace files (debug)
+      - name: List repo (debug)
         shell: pwsh
         run: |
-          Write-Host "Workspace: $env:GITHUB_WORKSPACE"
-          Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -File | Select-Object -First 50 | Format-Table FullName
+          Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -File | Select-Object -First 60 | Format-Table FullName
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
 
-      - name: Detect solution or project
+      - name: Detect .sln or .csproj
         id: detect
         shell: pwsh
         run: |
           $root = $env:GITHUB_WORKSPACE
           $sln = Get-ChildItem -Path $root -Recurse -Filter *.sln | Select-Object -First 1
           $csproj = $null
-          if (-not $sln) {
-            $csproj = Get-ChildItem -Path $root -Recurse -Filter *.csproj | Select-Object -First 1
-          }
-          if (-not $sln -and -not $csproj) {
-            Write-Error "No .sln or .csproj found in repository."
-          }
+          if (-not $sln) { $csproj = Get-ChildItem -Path $root -Recurse -Filter *.csproj | Select-Object -First 1 }
+          if (-not $sln -and -not $csproj) { Write-Error "No .sln or .csproj found." }
           if ($sln) {
             echo "SLN_PATH=$($sln.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-            Write-Host "Detected solution: $($sln.FullName)"
+            Write-Host "Solution: $($sln.FullName)"
           } else {
             echo "CSPROJ_PATH=$($csproj.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-            Write-Host "Detected project: $($csproj.FullName)"
+            Write-Host "Project: $($csproj.FullName)"
           }
+
+      - name: Clean
+        shell: pwsh
+        run: |
+          if ($env:SLN_PATH) { dotnet clean "$env:SLN_PATH" }
+          elseif ($env:CSPROJ_PATH) { dotnet clean "$env:CSPROJ_PATH" }
+          Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -Directory -Include bin,obj | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 
       - name: Restore
         shell: pwsh
         run: |
-          if ($env:SLN_PATH) {
-            dotnet restore "$env:SLN_PATH"
-          } elseif ($env:CSPROJ_PATH) {
-            dotnet restore "$env:CSPROJ_PATH"
-          } else {
-            Write-Error "Restore failed: neither SLN_PATH nor CSPROJ_PATH is set."
-          }
+          if ($env:SLN_PATH) { dotnet restore "$env:SLN_PATH" }
+          elseif ($env:CSPROJ_PATH) { dotnet restore "$env:CSPROJ_PATH" }
 
-      - name: Publish (self-contained)
+      - name: Publish (self-contained, disable XAML-generated Main)
         shell: pwsh
         run: |
           if (Test-Path $env:PUBLISH_OUT) { Remove-Item $env:PUBLISH_OUT -Recurse -Force }
           New-Item -ItemType Directory -Path $env:PUBLISH_OUT | Out-Null
+
+          $define = "DISABLE_XAML_GENERATED_MAIN"  # so our Program.cs is the only entry point
 
           if ($env:CSPROJ_PATH) {
             dotnet publish "$env:CSPROJ_PATH" `
               -c Release `
               -r win-x64 `
               --self-contained true `
-              -p:PublishSingleFile=false `
-              -p:IncludeNativeLibrariesForSelfExtract=false `
-              -o "$env:PUBLISH_OUT"
-          } elseif ($env:SLN_PATH) {
-            # Publish the first startup project in the solution by globbing. Adjust if you have multiple.
-            $firstProj = Get-ChildItem -Path (Split-Path $env:SLN_PATH) -Recurse -Filter *.csproj | Select-Object -First 1
-            if (-not $firstProj) { Write-Error "No .csproj found to publish."; exit 1 }
-            dotnet publish "$($firstProj.FullName)" `
-              -c Release `
-              -r win-x64 `
-              --self-contained true `
+              -p:DefineConstants="$(DefineConstants);$define" `
               -p:PublishSingleFile=false `
               -p:IncludeNativeLibrariesForSelfExtract=false `
               -o "$env:PUBLISH_OUT"
           } else {
-            Write-Error "Publish failed: neither SLN_PATH nor CSPROJ_PATH is set."
+            $firstProj = Get-ChildItem -Path (Split-Path $env:SLN_PATH) -Recurse -Filter *.csproj | Select-Object -First 1
+            dotnet publish "$($firstProj.FullName)" `
+              -c Release `
+              -r win-x64 `
+              --self-contained true `
+              -p:DefineConstants="$(DefineConstants);$define" `
+              -p:PublishSingleFile=false `
+              -p:IncludeNativeLibrariesForSelfExtract=false `
+              -o "$env:PUBLISH_OUT"
           }
-
-          Write-Host "Publish output:"
-          Get-ChildItem "$env:PUBLISH_OUT" -Recurse | Format-Table FullName
 
       - name: Install WiX Toolset v3 via Chocolatey
         shell: pwsh
@@ -108,16 +98,15 @@ jobs:
           $wixBin = "C:\Program Files (x86)\WiX Toolset v3.14\bin"
           if (-not (Test-Path $wixBin)) { throw "WiX bin not found: $wixBin" }
           echo "WIXBIN=$wixBin" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          Write-Host "WiX installed at $wixBin"
 
-      - name: Verify installer authoring exists
+      - name: Verify WiX authoring exists
         shell: pwsh
         run: |
           if (-not (Test-Path "$env:INSTALLER_DIR\SipCallerInfoApp.wxs")) {
-            Write-Error "Missing $env:INSTALLER_DIR\SipCallerInfoApp.wxs. Ensure your repo has the installer authoring."
+            Write-Error "Missing $env:INSTALLER_DIR\SipCallerInfoApp.wxs"
           }
 
-      - name: Harvest publish folder with Heat
+      - name: Harvest publish folder with Heat (suppress SelfReg)
         shell: pwsh
         run: |
           & "$env:WIXBIN\heat.exe" dir "$env:PUBLISH_OUT" `
@@ -126,14 +115,6 @@ jobs:
             -var var.PublishDir `
             -sfrag -srd -suid -sreg `
             -o "$env:INSTALLER_DIR\SipCallerInfoApp.Components.wxs"
-
-      - name: Validate UpgradeCode placeholder
-        shell: pwsh
-        run: |
-          $wxs = Get-Content "$env:INSTALLER_DIR\SipCallerInfoApp.wxs" -Raw
-          if ($wxs -match 'UpgradeCode="PUT-GUID-HERE"') {
-            Write-Error "UpgradeCode placeholder detected. Replace with a permanent GUID or pass -d UpgradeCode."
-          }
 
       - name: Compile (candle)
         shell: pwsh
