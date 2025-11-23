@@ -44,26 +44,81 @@ jobs:
           name: SipCallerInfoApp-EXE
           path: src/SipCallerInfoApp/bin/Release/net8.0-windows10.0.19041.0/win-x64/publish
 
-      - name: Install WiX Toolset (v3)
-        run: |
-          choco install wixtoolset -y
-
-      - name: Build MSI with WiX
+      
+      - name: Install WiX Toolset (v3) and resolve tool paths
         shell: pwsh
         run: |
-          $PublishDir = Resolve-Path "src/SipCallerInfoApp/bin/Release/net8.0-windows10.0.19041.0/win-x64/publish"
+          $ErrorActionPreference = 'Stop'
+
+          choco install wixtoolset -y
+          # Refresh PATH for this session
+          refreshenv
+
+          # Resolve WiX bin path
+          $wixDir = Get-ChildItem "C:\Program Files (x86)" -Filter "WiX Toolset v*" -Directory |
+            Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $wixDir) { throw "WiX Toolset not found under Program Files (x86)." }
+
+          $wixBin = Join-Path $wixDir.FullName "bin"
+          $env:WIX_BIN = $wixBin
+
+          # Verify tools
+          $tools = "heat.exe","candle.exe","light.exe"
+          foreach ($t in $tools) {
+            $p = Join-Path $wixBin $t
+            if (-not (Test-Path $p)) { throw "Missing $t at $p" }
+            Write-Host "Found $t at $p"
+          }
+
+      - name: Build MSI with WiX (harvest, compile, link)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          # Paths
+          $PublishDir   = Resolve-Path "src/SipCallerInfoApp/bin/Release/net8.0-windows10.0.19041.0/win-x64/publish"
           $InstallerDir = Resolve-Path "installer"
+          $DistDir      = Join-Path $InstallerDir "dist"
+          New-Item -ItemType Directory -Force -Path $DistDir | Out-Null
 
-          heat dir $PublishDir -cg AppComponents -gg -sfrag -srd -dr INSTALLDIR -var var.PublishDir -out "$InstallerDir/SipCallerInfoApp.Components.wxs"
+          $heat   = Join-Path $env:WIX_BIN "heat.exe"
+          $candle = Join-Path $env:WIX_BIN "candle.exe"
+          $light  = Join-Path $env:WIX_BIN "light.exe"
 
+          # Harvest publish output into a ComponentGroup 'AppComponents'
+          & $heat dir $PublishDir `
+            -cg AppComponents `
+            -gg `
+            -sfrag `
+            -srd `
+            -dr INSTALLDIR `
+            -var var.PublishDir `
+            -out "$InstallerDir/SipCallerInfoApp.Components.wxs"
+
+          # Compile WiX sources (include WixUIExtension)
           $wxs = Join-Path $InstallerDir "SipCallerInfoApp.wxs"
-          candle.exe -ext WixUIExtension -dPublishDir=$PublishDir "$InstallerDir/SipCallerInfoApp.Components.wxs" $wxs
+          & $candle -ext WixUIExtension `
+            -dPublishDir=$PublishDir `
+            "$InstallerDir/SipCallerInfoApp.Components.wxs" $wxs
 
-          $objs = Get-ChildItem $InstallerDir -Filter '*.wixobj' | ForEach-Object { $_.FullName }
-          light.exe -ext WixUIExtension -dPublishDir=$PublishDir -out "SipCallerInfoApp-1.0.0.msi" $objs
+          # Link to produce MSI in installer/dist
+          $wixobjs = Get-ChildItem $InstallerDir -Filter '*.wixobj' | ForEach-Object { $_.FullName }
+          $msiOut  = Join-Path $DistDir "SipCallerInfoApp-1.0.0.msi"
+
+          & $light -ext WixUIExtension `
+            -dPublishDir=$PublishDir `
+            -out $msiOut `
+            $wixobjs
+
+          Write-Host "MSI created at: $msiOut"
+          Get-ChildItem $DistDir | Format-Table -AutoSize
+
+          if (-not (Test-Path $msiOut)) {
+            throw "MSI not found at $msiOut. See previous logs for WiX errors."
+          }
 
       - name: Upload MSI Artifact
         uses: actions/upload-artifact@v4
         with:
           name: SipCallerInfoApp-MSI
-          path: SipCallerInfoApp-1.0.0.msi
+          path: installer/dist/SipCallerInfoApp-1.0.0.msi
