@@ -20,6 +20,14 @@ jobs:
       - name: Verify SDK
         run: dotnet --info
 
+      - name: Remove legacy Program.cs (prevents duplicate Program/Main)
+        shell: pwsh
+        run: |
+          if (Test-Path 'src/SipCallerInfoApp/Program.cs') {
+            Write-Host 'Removing legacy Program.cs to avoid duplicate Program/Main.'
+            Remove-Item 'src/SipCallerInfoApp/Program.cs' -Force
+          }
+
       - name: Restore
         run: dotnet restore src/SipCallerInfoApp/SipCallerInfoApp.csproj
 
