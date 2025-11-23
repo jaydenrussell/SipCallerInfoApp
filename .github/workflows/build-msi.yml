@@ -8,11 +8,11 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
-jobs:
+
+obs:
   build-msi:
     runs-on: windows-latest
     env:
-      # Keep this GUID constant across releases
       UPGRADE_CODE: "{E3A1C4F5-1234-4B7D-9D2B-ABCD12345678}"
       PUBLISH_OUT: "${{ github.workspace }}\\publish-win-x64"
       INSTALLER_DIR: "${{ github.workspace }}\\SipCallerInfoApp\\installer"
@@ -22,84 +22,38 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: List repo (debug)
+      - name: List workspace (debug)
         shell: pwsh
         run: |
-          Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -File | Select-Object -First 60 | Format-Table FullName
+          Write-Host "Workspace: $env:GITHUB_WORKSPACE"
+          Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -File | Select-Object -First 80 | Format-Table FullName
 
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "8.0.x"
+      # ... Restore/Publish steps (with correct DefineConstants handling) ...
 
-      - name: Detect .sln or .csproj
-        id: detect
+      
+
+      - name: List installer dir (debug)
         shell: pwsh
         run: |
-          $root = $env:GITHUB_WORKSPACE
-          $sln = Get-ChildItem -Path $root -Recurse -Filter *.sln | Select-Object -First 1
-          $csproj = $null
-          if (-not $sln) { $csproj = Get-ChildItem -Path $root -Recurse -Filter *.csproj | Select-Object -First 1 }
-          if (-not $sln -and -not $csproj) { Write-Error "No .sln or .csproj found." }
-          if ($sln) {
-            echo "SLN_PATH=$($sln.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-            Write-Host "Solution: $($sln.FullName)"
+          if (Test-Path "$env:INSTALLER_DIR") {
+            Get-ChildItem "$env:INSTALLER_DIR" -Recurse | Format-Table FullName
           } else {
-            echo "CSPROJ_PATH=$($csproj.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-            Write-Host "Project: $($csproj.FullName)"
+            Write-Host "Installer dir does not exist: $env:INSTALLER_DIR"
           }
-
-      - name: Clean
-        shell: pwsh
-        run: |
-          if ($env:SLN_PATH) { dotnet clean "$env:SLN_PATH" }
-          elseif ($env:CSPROJ_PATH) { dotnet clean "$env:CSPROJ_PATH" }
-          Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -Directory -Include bin,obj | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-
-      - name: Restore
-        shell: pwsh
-        run: |
-          if ($env:SLN_PATH) { dotnet restore "$env:SLN_PATH" }
-          elseif ($env:CSPROJ_PATH) { dotnet restore "$env:CSPROJ_PATH" }
-
-
-      - name: Publish (self-contained, disable XAML-generated Main)
-        shell: pwsh
-        run: |
-          if (Test-Path $env:PUBLISH_OUT) { Remove-Item $env:PUBLISH_OUT -Recurse -Force }
-          New-Item -ItemType Directory -Path $env:PUBLISH_OUT | Out-Null
-
-          # EITHER: simplest (override DefineConstants)
-          dotnet publish "$env:CSPROJ_PATH" `
-            -c Release `
-            -r win-x64 `
-            --self-contained true `
-            -p:DefineConstants=DISABLE_XAML_GENERATED_MAIN `
-            -p:PublishSingleFile=false `
-            -p:IncludeNativeLibrariesForSelfExtract=false `
-            -o "$env:PUBLISH_OUT"
-
-          # OR: if you need to append to existing project constants, use:
-          # dotnet publish "$env:CSPROJ_PATH" `
-          #   -c Release `
-          #   -r win-x64 `
-          #   --self-contained true `
-          #   -p:DefineConstants='$(DefineConstants);DISABLE_XAML_GENERATED_MAIN' `
-          #   -p:PublishSingleFile=false `
-          #   -p:IncludeNativeLibrariesForSelfExtract=false `
-          #   -o "$env:PUBLISH_OUT"
-
-
-
 
       - name: Verify WiX authoring exists
         shell: pwsh
         run: |
-          if (-not (Test-Path "$env:INSTALLER_DIR\SipCallerInfoApp.wxs")) {
-            Write-Error "Missing $env:INSTALLER_DIR\SipCallerInfoApp.wxs"
+          $wxs = Join-Path $env:INSTALLER_DIR "SipCallerInfoApp.wxs"
+          if (-not (Test-Path $wxs)) {
+            Write-Error "Missing $wxs. Ensure the file is committed or enable the optional generation step."
+          } else {
+            Write-Host "Found WiX authoring: $wxs"
           }
 
-      - name: Harvest publish folder with Heat (suppress SelfReg)
+      # (Optional) generate minimal WXS if missing — insert here if you want resiliency
+
+      - name: Harvest publish folder with Heat
         shell: pwsh
         run: |
           & "$env:WIXBIN\heat.exe" dir "$env:PUBLISH_OUT" `
@@ -134,3 +88,4 @@ jobs:
           name: SipCallerInfoApp-MSI
           path: ${{ env.MSI_OUTPUT }}
           if-no-files-found: error
+
