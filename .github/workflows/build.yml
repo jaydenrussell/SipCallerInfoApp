@@ -23,11 +23,39 @@ jobs:
       - name: Build
         run: dotnet build src/SipCallerInfoApp/SipCallerInfoApp.csproj -c Release
 
-      - name: Publish
-        run: dotnet publish src/SipCallerInfoApp/SipCallerInfoApp.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true
+      - name: Publish (Self-contained SingleFile)
+        run: |
+          dotnet publish src/SipCallerInfoApp/SipCallerInfoApp.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true
 
-      - name: Upload Artifact
+      - name: Upload EXE Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SipCallerInfoApp
+          name: SipCallerInfoApp-EXE
           path: src/SipCallerInfoApp/bin/Release/net9.0-windows10.0.19041.0/win-x64/publish
+
+      - name: Install WiX Toolset (v3)
+        run: |
+          choco install wixtoolset -y
+
+      - name: Build MSI with WiX
+        shell: pwsh
+        run: |
+          $PublishDir = Resolve-Path "src/SipCallerInfoApp/bin/Release/net9.0-windows10.0.19041.0/win-x64/publish"
+          $InstallerDir = Resolve-Path "installer"
+
+          # Harvest publish output into components
+          heat dir $PublishDir -cg AppComponents -gg -sfrag -srd -dr INSTALLDIR -var var.PublishDir -out "$InstallerDir/SipCallerInfoApp.Components.wxs"
+
+          # Compile WiX sources
+          $wxs = Join-Path $InstallerDir "SipCallerInfoApp.wxs"
+          candle.exe -ext WixUIExtension -dPublishDir=$PublishDir "$InstallerDir/SipCallerInfoApp.Components.wxs" $wxs
+
+          # Link to produce MSI
+          $objs = Get-ChildItem $InstallerDir -Filter '*.wixobj' | ForEach-Object { $_.FullName }
+          light.exe -ext WixUIExtension -dPublishDir=$PublishDir -out "SipCallerInfoApp-1.0.0.msi" $objs
+
+      - name: Upload MSI Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SipCallerInfoApp-MSI
+          path: SipCallerInfoApp-1.0.0.msi
