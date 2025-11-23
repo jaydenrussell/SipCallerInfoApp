@@ -90,13 +90,7 @@ jobs:
           #   -o "$env:PUBLISH_OUT"
 
 
-      - name: Install WiX Toolset v3 via Chocolatey
-        shell: pwsh
-        run: |
-          choco install wixtoolset --version=3.14.1.8722 -y
-          $wixBin = "C:\Program Files (x86)\WiX Toolset v3.14\bin"
-          if (-not (Test-Path $wixBin)) { throw "WiX bin not found: $wixBin" }
-          echo "WIXBIN=$wixBin" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
 
       - name: Verify WiX authoring exists
         shell: pwsh
