@@ -10,10 +10,10 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v3
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '9.0.x'
 
@@ -27,7 +27,7 @@ jobs:
         run: dotnet publish src/SipCallerInfoApp/SipCallerInfoApp.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: SipCallerInfoApp
           path: src/SipCallerInfoApp/bin/Release/net9.0-windows10.0.19041.0/win-x64/publish
