@@ -37,22 +37,17 @@ jobs:
 
       # ... Restore/Publish steps (with correct DefineConstants handling) ...
       
+      
       - name: Install WiX Toolset v3 via Chocolatey
         shell: pwsh
         run: |
           choco install wixtoolset --version=3.14.1.8722 -y
-
-    # WiX v3.14 default install location on windows-latest:
           $wixBin = "C:\Program Files (x86)\WiX Toolset v3.14\bin"
-
-          if (-not (Test-Path $wixBin)) {
-            Write-Error "WiX bin not found at $wixBin. Check choco install logs above."
-          }
-
-    # Export for subsequent steps
+          if (-not (Test-Path $wixBin)) { Write-Error "WiX bin not found: $wixBin" }
           "WIXBIN=$wixBin" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "WIXBIN set to: $wixBin"
+          Get-ChildItem "$wixBin" | Select-Object Name,Length | Format-Table
 
-          Write-Host "WiX installed. Using WIXBIN: $wixBin"
 
 
       - name: List installer dir (debug)
