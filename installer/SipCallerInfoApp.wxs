@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="SIP Caller Info App" Language="1033" Version="1.0.0.0" Manufacturer="Jayden Russell" UpgradeCode="PUT-GUID-HERE">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" />
+    <MediaTemplate />
+    <Feature Id="MainFeature" Title="Main Feature" Level="1">
+      <ComponentGroupRef Id="AppComponents" />
+    </Feature>
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFilesFolder">
+        <Directory Id="INSTALLDIR" Name="SipCallerInfoApp" />
+      </Directory>
+    </Directory>
+    <ComponentGroup Id="AppComponents">
+      <!-- Use heat.exe to harvest publish folder -->
+    </ComponentGroup>
+  </Product>
+</Wix>
