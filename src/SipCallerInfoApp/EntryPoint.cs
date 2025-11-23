@@ -1,3 +1,4 @@
+using Microsoft.UI.Xaml;
 using System;
 using System.Runtime.Versioning;
 
@@ -9,13 +10,13 @@ namespace SipCallerInfoApp
         [STAThread]
         static void Main(string[] args)
         {
+            // Required for SingleFile (Windows App SDK servicing builds)
             Environment.SetEnvironmentVariable(
                 "MICROSOFT_WINDOWSAPPRUNTIME_BASE_DIRECTORY",
                 AppContext.BaseDirectory);
 
-            var app = new App();
-            app.InitializeComponent();
-            app.Run();
+            // WinUI 3 entry point: starts the app and invokes your App class
+            Application.Start((p) => new App());
         }
     }
 }
