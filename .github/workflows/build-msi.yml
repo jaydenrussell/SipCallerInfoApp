@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 
-obs:
+jobs:
   build-msi:
     runs-on: windows-latest
     env:
