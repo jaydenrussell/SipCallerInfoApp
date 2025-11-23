@@ -1,5 +1,5 @@
 
-name: Build MSI Installer (WiX v3 via Chocolatey)
+name: Build MSI Installer (Auto-detect project)
 
 on:
   push:
@@ -13,36 +13,93 @@ jobs:
     runs-on: windows-latest
 
     env:
-      # Permanent UpgradeCode GUID (keep this constant across releases)
+      # Permanent UpgradeCode GUID (keep constant across releases)
       UPGRADE_CODE: "{E3A1C4F5-1234-4B7D-9D2B-ABCD12345678}"
-
-      SOLUTION_PATH: .\SipCallerInfoApp\SipCallerInfoApp.sln
-      CSPROJ_PATH: .\SipCallerInfoApp\src\SipCallerInfoApp\SipCallerInfoApp.csproj
-
-      # Paths
-      INSTALLER_DIR: D:\a\SipCallerInfoApp\SipCallerInfoApp\installer
-      MSI_OUTPUT: D:\a\SipCallerInfoApp\SipCallerInfoApp\installer\SipCallerInfoApp.msi
-      PUBLISH_DIR: D:\a\SipCallerInfoApp\SipCallerInfoApp\src\SipCallerInfoApp\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish
+      # Publish output folder inside the workspace (deterministic)
+      PUBLISH_OUT: "${{ github.workspace }}\\publish-win-x64"
+      # Installer dir in repo (adjust if yours differs)
+      INSTALLER_DIR: "${{ github.workspace }}\\SipCallerInfoApp\\installer"
+      # Final MSI output path
+      MSI_OUTPUT: "${{ github.workspace }}\\SipCallerInfoApp\\installer\\SipCallerInfoApp.msi"
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Show workspace files (debug)
+        shell: pwsh
+        run: |
+          Write-Host "Workspace: $env:GITHUB_WORKSPACE"
+          Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -File | Select-Object -First 50 | Format-Table FullName
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
 
-      - name: Restore & Publish (self-contained)
+      - name: Detect solution or project
+        id: detect
         shell: pwsh
         run: |
-          dotnet restore $env:SOLUTION_PATH
-          dotnet publish $env:CSPROJ_PATH `
-            -c Release `
-            -r win-x64 `
-            --self-contained true `
-            -p:PublishSingleFile=false `
-            -p:IncludeNativeLibrariesForSelfExtract=false
+          $root = $env:GITHUB_WORKSPACE
+          $sln = Get-ChildItem -Path $root -Recurse -Filter *.sln | Select-Object -First 1
+          $csproj = $null
+          if (-not $sln) {
+            $csproj = Get-ChildItem -Path $root -Recurse -Filter *.csproj | Select-Object -First 1
+          }
+          if (-not $sln -and -not $csproj) {
+            Write-Error "No .sln or .csproj found in repository."
+          }
+          if ($sln) {
+            echo "SLN_PATH=$($sln.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            Write-Host "Detected solution: $($sln.FullName)"
+          } else {
+            echo "CSPROJ_PATH=$($csproj.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            Write-Host "Detected project: $($csproj.FullName)"
+          }
+
+      - name: Restore
+        shell: pwsh
+        run: |
+          if ($env:SLN_PATH) {
+            dotnet restore "$env:SLN_PATH"
+          } elseif ($env:CSPROJ_PATH) {
+            dotnet restore "$env:CSPROJ_PATH"
+          } else {
+            Write-Error "Restore failed: neither SLN_PATH nor CSPROJ_PATH is set."
+          }
+
+      - name: Publish (self-contained)
+        shell: pwsh
+        run: |
+          if (Test-Path $env:PUBLISH_OUT) { Remove-Item $env:PUBLISH_OUT -Recurse -Force }
+          New-Item -ItemType Directory -Path $env:PUBLISH_OUT | Out-Null
+
+          if ($env:CSPROJ_PATH) {
+            dotnet publish "$env:CSPROJ_PATH" `
+              -c Release `
+              -r win-x64 `
+              --self-contained true `
+              -p:PublishSingleFile=false `
+              -p:IncludeNativeLibrariesForSelfExtract=false `
+              -o "$env:PUBLISH_OUT"
+          } elseif ($env:SLN_PATH) {
+            # Publish the first startup project in the solution by globbing. Adjust if you have multiple.
+            $firstProj = Get-ChildItem -Path (Split-Path $env:SLN_PATH) -Recurse -Filter *.csproj | Select-Object -First 1
+            if (-not $firstProj) { Write-Error "No .csproj found to publish."; exit 1 }
+            dotnet publish "$($firstProj.FullName)" `
+              -c Release `
+              -r win-x64 `
+              --self-contained true `
+              -p:PublishSingleFile=false `
+              -p:IncludeNativeLibrariesForSelfExtract=false `
+              -o "$env:PUBLISH_OUT"
+          } else {
+            Write-Error "Publish failed: neither SLN_PATH nor CSPROJ_PATH is set."
+          }
+
+          Write-Host "Publish output:"
+          Get-ChildItem "$env:PUBLISH_OUT" -Recurse | Format-Table FullName
 
       - name: Install WiX Toolset v3 via Chocolatey
         shell: pwsh
@@ -50,13 +107,20 @@ jobs:
           choco install wixtoolset --version=3.14.1.8722 -y
           $wixBin = "C:\Program Files (x86)\WiX Toolset v3.14\bin"
           if (-not (Test-Path $wixBin)) { throw "WiX bin not found: $wixBin" }
-          $env:PATH = "$wixBin;$env:PATH"
           echo "WIXBIN=$wixBin" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "WiX installed at $wixBin"
+
+      - name: Verify installer authoring exists
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "$env:INSTALLER_DIR\SipCallerInfoApp.wxs")) {
+            Write-Error "Missing $env:INSTALLER_DIR\SipCallerInfoApp.wxs. Ensure your repo has the installer authoring."
+          }
 
       - name: Harvest publish folder with Heat
         shell: pwsh
         run: |
-          & "$env:WIXBIN\heat.exe" dir "$env:PUBLISH_DIR" `
+          & "$env:WIXBIN\heat.exe" dir "$env:PUBLISH_OUT" `
             -cg SipCallerInfoAppComponents `
             -dr INSTALLFOLDER `
             -var var.PublishDir `
@@ -75,7 +139,7 @@ jobs:
         shell: pwsh
         run: |
           & "$env:WIXBIN\candle.exe" `
-            -d PublishDir="$env:PUBLISH_DIR" `
+            -d PublishDir="$env:PUBLISH_OUT" `
             -d UpgradeCode="$env:UPGRADE_CODE" `
             "$env:INSTALLER_DIR\SipCallerInfoApp.wxs" `
             "$env:INSTALLER_DIR\SipCallerInfoApp.Components.wxs"
