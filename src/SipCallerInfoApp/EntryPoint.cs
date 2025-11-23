@@ -9,7 +9,7 @@ namespace SipCallerInfoApp
         [STAThread]
         static void Main(string[] args)
         {
-            // Required for SingleFile with Windows App SDK 1.8.x
+            // Required for SingleFile with Windows App SDK servicing builds
             Environment.SetEnvironmentVariable(
                 "MICROSOFT_WINDOWSAPPRUNTIME_BASE_DIRECTORY",
                 AppContext.BaseDirectory);
