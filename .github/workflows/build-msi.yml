@@ -35,12 +35,14 @@ jobs:
       - name: List installer dir (debug)
         shell: pwsh
         run: |
+          Write-Host "Workspace: $env:GITHUB_WORKSPACE"
           if (Test-Path "$env:INSTALLER_DIR") {
             Get-ChildItem "$env:INSTALLER_DIR" -Recurse | Format-Table FullName
           } else {
             Write-Host "Installer dir does not exist: $env:INSTALLER_DIR"
+            Get-ChildItem $env:GITHUB_WORKSPACE -Recurse -Directory | Select-Object -First 80 | Format-Table FullName
           }
-
+  
       - name: Verify WiX authoring exists
         shell: pwsh
         run: |
