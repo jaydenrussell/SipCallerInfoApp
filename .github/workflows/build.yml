@@ -1,0 +1,33 @@
+name: Build and Package SIP Caller Info App
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore
+        run: dotnet restore src/SipCallerInfoApp/SipCallerInfoApp.csproj
+
+      - name: Build
+        run: dotnet build src/SipCallerInfoApp/SipCallerInfoApp.csproj -c Release
+
+      - name: Publish
+        run: dotnet publish src/SipCallerInfoApp/SipCallerInfoApp.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: SipCallerInfoApp
+          path: src/SipCallerInfoApp/bin/Release/net9.0-windows10.0.19041.0/win-x64/publish
