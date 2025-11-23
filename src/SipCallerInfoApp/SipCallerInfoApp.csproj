@@ -6,10 +6,11 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
+    <EnableMsixTooling>true</EnableMsixTooling>  <!-- ✅ required by 1.6.240829007 -->
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.5" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.240829007" />
   </ItemGroup>
 </Project>
