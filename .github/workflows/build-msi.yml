@@ -62,34 +62,33 @@ jobs:
           if ($env:SLN_PATH) { dotnet restore "$env:SLN_PATH" }
           elseif ($env:CSPROJ_PATH) { dotnet restore "$env:CSPROJ_PATH" }
 
+
       - name: Publish (self-contained, disable XAML-generated Main)
         shell: pwsh
         run: |
           if (Test-Path $env:PUBLISH_OUT) { Remove-Item $env:PUBLISH_OUT -Recurse -Force }
           New-Item -ItemType Directory -Path $env:PUBLISH_OUT | Out-Null
 
-          $define = "DISABLE_XAML_GENERATED_MAIN"  # so our Program.cs is the only entry point
+          # EITHER: simplest (override DefineConstants)
+          dotnet publish "$env:CSPROJ_PATH" `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -p:DefineConstants=DISABLE_XAML_GENERATED_MAIN `
+            -p:PublishSingleFile=false `
+            -p:IncludeNativeLibrariesForSelfExtract=false `
+            -o "$env:PUBLISH_OUT"
 
-          if ($env:CSPROJ_PATH) {
-            dotnet publish "$env:CSPROJ_PATH" `
-              -c Release `
-              -r win-x64 `
-              --self-contained true `
-              -p:DefineConstants="$(DefineConstants);$define" `
-              -p:PublishSingleFile=false `
-              -p:IncludeNativeLibrariesForSelfExtract=false `
-              -o "$env:PUBLISH_OUT"
-          } else {
-            $firstProj = Get-ChildItem -Path (Split-Path $env:SLN_PATH) -Recurse -Filter *.csproj | Select-Object -First 1
-            dotnet publish "$($firstProj.FullName)" `
-              -c Release `
-              -r win-x64 `
-              --self-contained true `
-              -p:DefineConstants="$(DefineConstants);$define" `
-              -p:PublishSingleFile=false `
-              -p:IncludeNativeLibrariesForSelfExtract=false `
-              -o "$env:PUBLISH_OUT"
-          }
+          # OR: if you need to append to existing project constants, use:
+          # dotnet publish "$env:CSPROJ_PATH" `
+          #   -c Release `
+          #   -r win-x64 `
+          #   --self-contained true `
+          #   -p:DefineConstants='$(DefineConstants);DISABLE_XAML_GENERATED_MAIN' `
+          #   -p:PublishSingleFile=false `
+          #   -p:IncludeNativeLibrariesForSelfExtract=false `
+          #   -o "$env:PUBLISH_OUT"
+
 
       - name: Install WiX Toolset v3 via Chocolatey
         shell: pwsh
