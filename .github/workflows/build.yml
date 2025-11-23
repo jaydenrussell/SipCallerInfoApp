@@ -45,7 +45,7 @@ jobs:
           path: src/SipCallerInfoApp/bin/Release/net8.0-windows10.0.19041.0/win-x64/publish   
       
       
-name: Build MSI (WiX v3)
+- name: Build MSI (WiX v3)
 
 on:
   push:
