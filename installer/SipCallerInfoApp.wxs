@@ -6,29 +6,12 @@
     <MediaTemplate />
     <Feature Id="MainFeature" Title="SIP Caller Info App" Level="1">
       <ComponentGroupRef Id="AppComponents" />
-      <ComponentRef Id="StartMenuShortcutComponent" />
-      <ComponentRef Id="UninstallShortcutComponent" />
     </Feature>
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFilesFolder">
         <Directory Id="INSTALLDIR" Name="SipCallerInfoApp" />
       </Directory>
-      <Directory Id="ProgramMenuFolder">
-        <Directory Id="ProgramMenuDir" Name="SipCallerInfoApp" />
-      </Directory>
     </Directory>
-    <DirectoryRef Id="ProgramMenuDir">
-      <Component Id="StartMenuShortcutComponent" Guid="PUT-GUID-HERE-STARTMENU">
-        <Shortcut Id="StartMenuShortcut" Name="SIP Caller Info App" Description="Caller ID desktop integration" Target="[INSTALLDIR]SipCallerInfoApp.exe" WorkingDirectory="INSTALLDIR" />
-        <RemoveFolder Id="RemoveStartMenuDir" On="uninstall" />
-        <RegistryValue Root="HKCU" Key="Software\SipCallerInfoApp" Name="installed" Type="integer" Value="1" KeyPath="yes" />
-      </Component>
-      <Component Id="UninstallShortcutComponent" Guid="PUT-GUID-HERE-UNINSTALL">
-        <Shortcut Id="UninstallShortcut" Name="Uninstall SIP Caller Info App" Description="Remove SIP Caller Info App" Target="[System64Folder]msiexec.exe" Arguments="/x [ProductCode]" />
-        <RemoveFolder Id="RemoveStartMenuDir2" On="uninstall" />
-        <RegistryValue Root="HKCU" Key="Software\SipCallerInfoApp" Name="uninstallShortcut" Type="integer" Value="1" KeyPath="yes" />
-      </Component>
-    </DirectoryRef>
     <ComponentGroup Id="AppComponents" />
   </Product>
 </Wix>
