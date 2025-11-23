@@ -42,11 +42,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SipCallerInfoApp-EXE
-          path: src/SipCallerInfoApp/bin/Release/net8.0-windows10.0.19041.0/win-x64/publish
-
+          path: src/SipCallerInfoApp/bin/Release/net8.0-windows10.0.19041.0/win-x64/publish   
       
-      
-- name: Install WiX Toolset (v3)
+      - name: Install WiX Toolset (v3)
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
