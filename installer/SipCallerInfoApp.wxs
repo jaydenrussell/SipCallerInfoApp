@@ -1,16 +1,35 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  
+<?define PublishDir = "$(var.PublishDir)" ?>
+<?define UpgradeCode = "$(var.UpgradeCode)" ?>
+
   <Product Id="*"
          Name="Sip Caller Info App"
          Language="1033"
          Version="1.0.0.0"
          Manufacturer="Jayden Russell"
-         UpgradeCode="{E3A1C4F5-1234-4B7D-9D2B-ABCD12345678}">
-  <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" />
-  <MajorUpgrade Schedule="afterInstallInitialize"
+         UpgradeCode="$(var.UpgradeCode)">
+
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" />
+
+    <UIRef Id="WixUI_InstallDir" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+
+    <MajorUpgrade Schedule="afterInstallInitialize"
                 AllowDowngrades="no"
                 DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
-  …
-  </Product>
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFilesFolder">
+        <Directory Id="INSTALLFOLDER" Name="SipCallerInfoApp" />
+      </Directory>
+    </Directory>
+
+    <Feature Id="MainFeature" Title="Sip Caller Info App" Level="1">
+      <ComponentGroupRef Id="SipCallerInfoAppComponents" />
+  </Feature>
+</Product>
+
 
 </Wix>
