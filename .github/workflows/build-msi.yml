@@ -14,9 +14,16 @@ jobs:
     runs-on: windows-latest
     env:
       UPGRADE_CODE: "{E3A1C4F5-1234-4B7D-9D2B-ABCD12345678}"
+
+  # Deterministic publish output inside workspace
       PUBLISH_OUT: "${{ github.workspace }}\\publish-win-x64"
-      INSTALLER_DIR: "${{ github.workspace }}\\SipCallerInfoApp\\installer"
-      MSI_OUTPUT: "${{ github.workspace }}\\SipCallerInfoApp\\installer\\SipCallerInfoApp.msi"
+
+  # 🔧 Correct installer directory (matches what your debug step showed)
+      INSTALLER_DIR: "${{ github.workspace }}\\installer"
+
+  # MSI output path
+      MSI_OUTPUT: "${{ github.workspace }}\\installer\\SipCallerInfoApp.msi"
+
 
     steps:
       - name: Checkout
