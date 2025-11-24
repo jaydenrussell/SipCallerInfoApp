@@ -139,7 +139,7 @@ jobs:
           & "$env:WIXBIN\candle.exe" `
             -dPublishDir="$env:PUBLISH_OUT" `
             -dUpgradeCode="$env:UPGRADE_CODE" `
-            out "$env:INSTALLER_DIR\" `
+            -out "$env:INSTALLER_DIR\" `
             "$env:INSTALLER_DIR\SipCallerInfoApp.wxs" `
             "$env:INSTALLER_DIR\SipCallerInfoApp.Components.wxs"
 
