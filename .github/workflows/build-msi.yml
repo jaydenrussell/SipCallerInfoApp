@@ -135,43 +135,43 @@ jobs:
 
       
       
-- name: Sanitize harvested fragment (remove .mui & Language attrs)
-  shell: pwsh
-  run: |
-    $frag = Join-Path $env:INSTALLER_DIR "SipCallerInfoApp.Components.wxs"
-    if (-not (Test-Path $frag)) { Write-Error "Missing $frag"; exit 1 }
-
-    # Read entire file as text (Heat often outputs single-line XML)
-    $text = Get-Content $frag -Raw
-
-    # --- Counters (for logging) ---
-    $langMatches = [Regex]::Matches($text, 'Language="[^"]*"', 'IgnoreCase').Count
-    $muiSelfCloseMatches = [Regex]::Matches($text, '<File\b[^>]*Name="[^"]*\.mui[^"]*"[^>]*/>', 'IgnoreCase').Count
-    $muiBlockMatches     = [Regex]::Matches($text, '<File\b[^>]*Name="[^"]*\.mui[^"]*"[^>]*>.*?</File>', 'IgnoreCase, Singleline').Count
-
-    Write-Host "Pre-sanitize: Language attrs=$langMatches; self-closing .mui files=$muiSelfCloseMatches; block .mui files=$muiBlockMatches"
-
-    # 1) Remove ALL Language="..." attributes on <File> nodes (case-insensitive)
-    $text = [Regex]::Replace($text, '(\sLanguage="[^"]*")', '', 'IgnoreCase, Singleline')
-
-    # 2) Remove ALL <File ... Name="*.mui..."/> elements (self-closing)
-    $text = [Regex]::Replace($text, '<File\b[^>]*Name="[^"]*\.mui[^"]*"[^>]*/>', '', 'IgnoreCase, Singleline')
-
-    # 3) Remove ALL <File ... Name="*.mui..."> ... </File> blocks (expanded tags; rare)
-    $text = [Regex]::Replace($text, '<File\b[^>]*Name="[^"]*\.mui[^"]*"[^>]*>.*?</File>', '', 'IgnoreCase, Singleline')
-
-    # --- Post-sanitize verification ---
-    $langMatchesAfter = [Regex]::Matches($text, 'Language="[^"]*"', 'IgnoreCase').Count
-    $muiSelfAfter     = [Regex]::Matches($text, '<File\b[^>]*Name="[^"]*\.mui[^"]*"[^>]*/>', 'IgnoreCase').Count
-    $muiBlockAfter    = [Regex]::Matches($text, '<File\b[^>]*Name="[^"]*\.mui[^"]*"[^>]*>.*?</File>', 'IgnoreCase, Singleline').Count
-    Write-Host "Post-sanitize: Language attrs=$langMatchesAfter; self-closing .mui files=$muiSelfAfter; block .mui files=$muiBlockAfter"
-
-    # Write back as UTF-8 (no BOM)
-    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-    [System.IO.File]::WriteAllText($frag, $text, $utf8NoBom)
-
-    # Show first few lines for debug
-    Get-Content $frag -TotalCount 5 | % { "WXS: $_" }
+      - name: Sanitize harvested fragment (remove .mui & Language attrs)
+        shell: pwsh
+        run: |
+          $frag = Join-Path $env:INSTALLER_DIR "SipCallerInfoApp.Components.wxs"
+          if (-not (Test-Path $frag)) { Write-Error "Missing $frag"; exit 1 }
+      
+          # Read entire file as text (Heat often outputs single-line XML)
+          $text = Get-Content $frag -Raw
+      
+          # --- Counters (for logging) ---
+          $langMatches = [Regex]::Matches($text, 'Language="[^"]*"', 'IgnoreCase').Count
+          $muiSelfCloseMatches = [Regex]::Matches($text, '<File\b[^>]*Name="[^"]*\.mui[^"]*"[^>]*/>', 'IgnoreCase').Count
+          $muiBlockMatches     = [Regex]::Matches($text, '<File\b[^>]*Name="[^"]*\.mui[^"]*"[^>]*>.*?</File>', 'IgnoreCase, Singleline').Count
+      
+          Write-Host "Pre-sanitize: Language attrs=$langMatches; self-closing .mui files=$muiSelfCloseMatches; block .mui files=$muiBlockMatches"
+      
+          # 1) Remove ALL Language="..." attributes on <File> nodes (case-insensitive)
+          $text = [Regex]::Replace($text, '(\sLanguage="[^"]*")', '', 'IgnoreCase, Singleline')
+      
+          # 2) Remove ALL <File ... Name="*.mui..."/> elements (self-closing)
+          $text = [Regex]::Replace($text, '<File\b[^>]*Name="[^"]*\.mui[^"]*"[^>]*/>', '', 'IgnoreCase, Singleline')
+      
+          # 3) Remove ALL <File ... Name="*.mui..."> ... </File> blocks (expanded tags; rare)
+          $text = [Regex]::Replace($text, '<File\b[^>]*Name="[^"]*\.mui[^"]*"[^>]*>.*?</File>', '', 'IgnoreCase, Singleline')
+      
+          # --- Post-sanitize verification ---
+          $langMatchesAfter = [Regex]::Matches($text, 'Language="[^"]*"', 'IgnoreCase').Count
+          $muiSelfAfter     = [Regex]::Matches($text, '<File\b[^>]*Name="[^"]*\.mui[^"]*"[^>]*/>', 'IgnoreCase').Count
+          $muiBlockAfter    = [Regex]::Matches($text, '<File\b[^>]*Name="[^"]*\.mui[^"]*"[^>]*>.*?</File>', 'IgnoreCase, Singleline').Count
+          Write-Host "Post-sanitize: Language attrs=$langMatchesAfter; self-closing .mui files=$muiSelfAfter; block .mui files=$muiBlockAfter"
+      
+          # Write back as UTF-8 (no BOM)
+          $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+          [System.IO.File]::WriteAllText($frag, $text, $utf8NoBom)
+      
+          # Show first few lines for debug
+          Get-Content $frag -TotalCount 5 | % { "WXS: $_" }
 
 
 
