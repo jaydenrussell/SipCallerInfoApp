@@ -133,6 +133,43 @@ jobs:
             -gg `
             -o "$env:INSTALLER_DIR\SipCallerInfoApp.Components.wxs"
 
+      
+      - name: Sanitize harvested fragment (remove .mui & Language attrs)
+        shell: pwsh
+        run: |
+          $frag = Join-Path $env:INSTALLER_DIR "SipCallerInfoApp.Components.wxs"
+          if (-not (Test-Path $frag)) { Write-Error "Missing $frag"; exit 1 }
+
+          # Load XML preserving namespaces
+          [xml]$xml = Get-Content $frag -Raw
+
+          # Get all File elements (WiX namespace)
+          $ns = @{ wi = "http://schemas.microsoft.com/wix/2006/wi" }
+          $files = $xml.SelectNodes("//wi:File", $ns)
+
+          # Remove .mui files
+          $removeCount = 0
+          foreach ($f in $files) {
+            $name = $f.GetAttribute("Name")
+            if ($name -like "*.mui") {
+              $parent = $f.ParentNode
+              $parent.RemoveChild($f) | Out-Null
+              $removeCount++
+            } else {
+              # Drop invalid/harvested Language attributes
+              if ($f.HasAttribute("Language")) {
+                $f.RemoveAttribute("Language")
+              }
+            }
+          }
+
+          # Write back as UTF-8 without BOM
+          $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+          [System.IO.File]::WriteAllText($frag, $xml.OuterXml, $utf8NoBom)
+
+          Write-Host "Sanitized SipCallerInfoApp.Components.wxs: removed $removeCount *.mui files and cleared Language attributes."
+
+
       - name: Compile (candle)
         shell: pwsh
         run: |
