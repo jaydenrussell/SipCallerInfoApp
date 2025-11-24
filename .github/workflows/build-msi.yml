@@ -136,8 +136,8 @@ jobs:
         shell: pwsh
         run: |
           & "$env:WIXBIN\candle.exe" `
-            -d PublishDir="$env:PUBLISH_OUT" `
-            -d UpgradeCode="$env:UPGRADE_CODE" `
+            -dPublishDir="$env:PUBLISH_OUT" `
+            -dUpgradeCode="$env:UPGRADE_CODE" `
             "$env:INSTALLER_DIR\SipCallerInfoApp.wxs" `
             "$env:INSTALLER_DIR\SipCallerInfoApp.Components.wxs"
 
