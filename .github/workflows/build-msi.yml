@@ -130,6 +130,7 @@ jobs:
             -dr INSTALLFOLDER `
             -var var.PublishDir `
             -sfrag -srd -suid -sreg `
+            -gg `
             -o "$env:INSTALLER_DIR\SipCallerInfoApp.Components.wxs"
 
       - name: Compile (candle)
