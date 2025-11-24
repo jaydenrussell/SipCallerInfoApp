@@ -14,14 +14,8 @@ jobs:
     runs-on: windows-latest
     env:
       UPGRADE_CODE: "{E3A1C4F5-1234-4B7D-9D2B-ABCD12345678}"
-
-  # Deterministic publish output inside workspace
       PUBLISH_OUT: "${{ github.workspace }}\\publish-win-x64"
-
-  # 🔧 Correct installer directory (matches what your debug step showed)
       INSTALLER_DIR: "${{ github.workspace }}\\installer"
-
-  # MSI output path
       MSI_OUTPUT: "${{ github.workspace }}\\installer\\SipCallerInfoApp.msi"
 
 
@@ -73,6 +67,22 @@ jobs:
           } else {
             Write-Host "Found WiX authoring: $wxs"
           }
+
+        
+      - name: Verify publish output
+        shell: pwsh
+        run: |  
+          if (-not (Test-Path "$env:PUBLISH_OUT")) {
+            Write-Error "Publish output folder not found: $env:PUBLISH_OUT. Did the publish step use -o $env:PUBLISH_OUT?"
+          }
+          $files = Get-ChildItem "$env:PUBLISH_OUT" -Recurse -File
+          if ($files.Count -eq 0) {
+            Write-Error "Publish output is empty: $env:PUBLISH_OUT. Check the dotnet publish logs."
+          } else {
+            Write-Host "Publish output contains $($files.Count) files."
+            $files | Select-Object -First 20 | Format-Table FullName
+          }
+
 
       # (Optional) generate minimal WXS if missing — insert here if you want resiliency
 
