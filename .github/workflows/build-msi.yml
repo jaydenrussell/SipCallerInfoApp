@@ -136,39 +136,31 @@ jobs:
       
       - name: Sanitize harvested fragment (remove .mui & Language attrs)
         shell: pwsh
-        run: |
+        run: | 
           $frag = Join-Path $env:INSTALLER_DIR "SipCallerInfoApp.Components.wxs"
           if (-not (Test-Path $frag)) { Write-Error "Missing $frag"; exit 1 }
 
-          # Load XML preserving namespaces
-          [xml]$xml = Get-Content $frag -Raw
+          # Read entire file as text
+          $text = Get-Content $frag -Raw
 
+          # 1) Remove ALL Language="..." attributes on <File> nodes
+          #    (handles self-closing or expanded tags)
+          $text = [Regex]::Replace($text, '(\sLanguage="[^"]*")', '', 'Singleline')
 
-          # Select <File/> elements regardless of namespace
-          $files = $xml.SelectNodes("//*[local-name()='File']")
+          # 2) Remove ALL <File ... Name="*.mui" .../> elements completely
+          #    (harvested satellites; keep MSI lean and avoid ICE03)
+          $text = [Regex]::Replace($text, '<File\b[^>]*Name="[^"]*\.mui"[^>]*/>', '', 'Singleline')
 
+          # Optionally also remove any <File ... Name="*.mui"...> ... </File> blocks (rare)
+          $text = [Regex]::Replace($text, '<File\b[^>]*Name="[^"]*\.mui"[^>]*>.*?</File>', '', 'Singleline')
 
-          # Remove .mui files
-          $removeCount = 0
-          foreach ($f in $files) {
-            $name = $f.GetAttribute("Name")
-            if ($name -like "*.mui") {
-              $parent = $f.ParentNode
-              $parent.RemoveChild($f) | Out-Null
-              $removeCount++
-            } else {
-              # Drop invalid/harvested Language attributes
-              if ($f.HasAttribute("Language")) {
-                $f.RemoveAttribute("Language")
-              }
-            }
-          }
-
-          # Write back as UTF-8 without BOM
+          # Write back as UTF-8 (no BOM)
           $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-          [System.IO.File]::WriteAllText($frag, $xml.OuterXml, $utf8NoBom)
+          [System.IO.File]::WriteAllText($frag, $text, $utf8NoBom)
 
-          Write-Host "Sanitized: removed $removeCount *.mui files and cleared Language attrs."
+          # Quick preview
+          Get-Content $frag -TotalCount 5 | % { "WXS: $_" }
+
 
       - name: Compile (candle)
         shell: pwsh
