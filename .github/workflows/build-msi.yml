@@ -1,5 +1,5 @@
 
-name: Build MSI Installer (WinUI 3, WiX v3)
+name: Build MSI (WinUI 3 + WiX v3)
 
 on:
   push:
@@ -8,120 +8,121 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
-
 jobs:
   build-msi:
     runs-on: windows-latest
+
     env:
+      # Keep this GUID constant across releases (major upgrade detection depends on it)
       UPGRADE_CODE: "{E3A1C4F5-1234-4B7D-9D2B-ABCD12345678}"
+
+      # Deterministic publish output inside workspace
       PUBLISH_OUT: "${{ github.workspace }}\\publish-win-x64"
+
+      # Your repo has a top-level 'installer' folder
       INSTALLER_DIR: "${{ github.workspace }}\\installer"
       MSI_OUTPUT: "${{ github.workspace }}\\installer\\SipCallerInfoApp.msi"
 
+      # Optional: pin the csproj to avoid auto-detect ambiguity
+      # Uncomment and set to your actual project path if needed:
+      # CSPROJ_PATH: "${{ github.workspace }}\\src\\SipCallerInfoApp\\SipCallerInfoApp.csproj"
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: List workspace (debug)
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Detect .sln or .csproj (skip if CSPROJ_PATH is set)
+        if: ${{ env.CSPROJ_PATH == '' }}
         shell: pwsh
         run: |
-          Write-Host "Workspace: $env:GITHUB_WORKSPACE"
-          Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -File | Select-Object -First 80 | Format-Table FullName
-
-      # ... Restore/Publish steps (with correct DefineConstants handling) ...
-      
-      
-      - name: Install WiX Toolset v3 via Chocolatey
-        shell: pwsh
-        run: |
-          choco install wixtoolset -y
-          $wixBin = "C:\Program Files (x86)\WiX Toolset v3.14\bin"
-          if (-not (Test-Path $wixBin)) { Write-Error "WiX bin not found: $wixBin" }
-          "WIXBIN=$wixBin" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          Write-Host "WIXBIN set to: $wixBin"
-          Get-ChildItem "$wixBin" | Select-Object Name,Length | Format-Table
-
-
-
-      - name: List installer dir (debug)
-        shell: pwsh
-        run: |         
-          Write-Host "Workspace: $env:GITHUB_WORKSPACE"
-            if (Test-Path "$env:INSTALLER_DIR") {
-              Write-Host "Installer dir contents:"
-              Get-ChildItem "$env:INSTALLER_DIR" -Recurse | Format-Table FullName
-            } else {
-              Write-Host "Installer dir does not exist: $env:INSTALLER_DIR"
-              Write-Host "Top-level directories in workspace:"
-              Get-ChildItem $env:GITHUB_WORKSPACE -Directory | Format-Table FullName
-            }
-
-  
-      - name: Verify WiX authoring exists
-        shell: pwsh
-        run: |
-          $wxs = Join-Path $env:INSTALLER_DIR "SipCallerInfoApp.wxs"
-          if (-not (Test-Path $wxs)) {
-            Write-Error "Missing $wxs. Ensure the file is committed or enable the optional generation step."
+          $root = $env:GITHUB_WORKSPACE
+          $sln = Get-ChildItem -Path $root -Recurse -Filter *.sln | Select-Object -First 1
+          $csproj = $null
+          if (-not $sln) { $csproj = Get-ChildItem -Path $root -Recurse -Filter *.csproj | Select-Object -First 1 }
+          if (-not $sln -and -not $csproj) { Write-Error "No .sln or .csproj found." }
+          if ($sln) {
+            "SLN_PATH=$($sln.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            Write-Host "Detected solution: $($sln.FullName)"
           } else {
-            Write-Host "Found WiX authoring: $wxs"
+            "CSPROJ_PATH=$($csproj.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            Write-Host "Detected project: $($csproj.FullName)"
           }
 
+      - name: Clean & Restore
+        shell: pwsh
+        run: |
+          if ($env:SLN_PATH) { dotnet clean "$env:SLN_PATH"; dotnet restore "$env:SLN_PATH" }
+          elseif ($env:CSPROJ_PATH) { dotnet clean "$env:CSPROJ_PATH"; dotnet restore "$env:CSPROJ_PATH" }
+          else { Write-Error "Neither SLN_PATH nor CSPROJ_PATH is set."; exit 1 }
 
-      
       - name: Publish (self-contained, disable XAML-generated Main)
         shell: pwsh
         run: |
           if (Test-Path $env:PUBLISH_OUT) { Remove-Item $env:PUBLISH_OUT -Recurse -Force }
           New-Item -ItemType Directory -Path $env:PUBLISH_OUT | Out-Null
 
-    # If you have the exact csproj path, set CSPROJ_PATH as an env and use it.
-    # Otherwise keep auto-detect from previous steps.
           if ($env:CSPROJ_PATH) {
             dotnet publish "$env:CSPROJ_PATH" `
               -c Release -r win-x64 --self-contained true `
               -p:DefineConstants=DISABLE_XAML_GENERATED_MAIN `
-              -p:PublishSingleFile=false `
-              -p:IncludeNativeLibrariesForSelfExtract=false `
+              -p:PublishSingleFile=false -p:IncludeNativeLibrariesForSelfExtract=false `
               -o "$env:PUBLISH_OUT"
           } else {
-            $firstProj = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -Filter *.csproj | Select-Object -First 1
+            $firstProj = Get-ChildItem -Path (Split-Path $env:SLN_PATH) -Recurse -Filter *.csproj | Select-Object -First 1
             if (-not $firstProj) { Write-Error "No .csproj found to publish."; exit 1 }
             dotnet publish "$($firstProj.FullName)" `
               -c Release -r win-x64 --self-contained true `
               -p:DefineConstants=DISABLE_XAML_GENERATED_MAIN `
-              -p:PublishSingleFile=false `
-              -p:IncludeNativeLibrariesForSelfExtract=false `
+              -p:PublishSingleFile=false -p:IncludeNativeLibrariesForSelfExtract=false `
               -o "$env:PUBLISH_OUT"
           }
 
-      
-      
-      
-      
-        
-      
-      
-        
       - name: Verify publish output
         shell: pwsh
-        run: |  
+        run: |
           if (-not (Test-Path "$env:PUBLISH_OUT")) {
-            Write-Error "Publish output folder not found: $env:PUBLISH_OUT. Did the publish step use -o $env:PUBLISH_OUT?"
+            Write-Error "Publish output folder not found: $env:PUBLISH_OUT."
           }
           $files = Get-ChildItem "$env:PUBLISH_OUT" -Recurse -File
           if ($files.Count -eq 0) {
-            Write-Error "Publish output is empty: $env:PUBLISH_OUT. Check the dotnet publish logs."
+            Write-Error "Publish output is empty: $env:PUBLISH_OUT. Check dotnet publish logs."
           } else {
             Write-Host "Publish output contains $($files.Count) files."
             $files | Select-Object -First 20 | Format-Table FullName
           }
 
+      - name: Install WiX Toolset v3 via Chocolatey
+        shell: pwsh
+        run: |
+          choco install wixtoolset --version=3.14.1.8722 -y
+          $wixBin = "C:\Program Files (x86)\WiX Toolset v3.14\bin"
+          if (-not (Test-Path $wixBin)) { Write-Error "WiX bin not found: $wixBin" }
+          "WIXBIN=$wixBin" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "WIXBIN set to: $wixBin"
+          Get-ChildItem "$wixBin" | Select-Object Name,Length | Format-Table
 
-      # (Optional) generate minimal WXS if missing — insert here if you want resiliency
+      - name: List installer dir (debug)
+        shell: pwsh
+        run: |
+          Write-Host "Workspace: $env:GITHUB_WORKSPACE"
+          Get-ChildItem "$env:INSTALLER_DIR" -Recurse | Format-Table FullName
 
-      - name: Harvest publish folder with Heat
+      - name: Verify WiX authoring exists
+        shell: pwsh
+        run: |
+          $wxs = Join-Path $env:INSTALLER_DIR "SipCallerInfoApp.wxs"
+          if (-not (Test-Path $wxs)) {
+            Write-Error "Missing $wxs. Ensure your authoring is committed under /installer/"
+          } else {
+            Write-Host "Found WiX authoring: $wxs"
+          }
+
+      - name: Harvest publish folder with Heat (suppress SelfReg)
         shell: pwsh
         run: |
           & "$env:WIXBIN\heat.exe" dir "$env:PUBLISH_OUT" `
@@ -156,4 +157,3 @@ jobs:
           name: SipCallerInfoApp-MSI
           path: ${{ env.MSI_OUTPUT }}
           if-no-files-found: error
-
