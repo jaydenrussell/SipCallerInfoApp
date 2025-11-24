@@ -68,6 +68,41 @@ jobs:
             Write-Host "Found WiX authoring: $wxs"
           }
 
+
+      
+      - name: Publish (self-contained, disable XAML-generated Main)
+        shell: pwsh
+        run: |
+          if (Test-Path $env:PUBLISH_OUT) { Remove-Item $env:PUBLISH_OUT -Recurse -Force }
+          New-Item -ItemType Directory -Path $env:PUBLISH_OUT | Out-Null
+
+    # If you have the exact csproj path, set CSPROJ_PATH as an env and use it.
+    # Otherwise keep auto-detect from previous steps.
+          if ($env:CSPROJ_PATH) {
+            dotnet publish "$env:CSPROJ_PATH" `
+              -c Release -r win-x64 --self-contained true `
+              -p:DefineConstants=DISABLE_XAML_GENERATED_MAIN `
+              -p:PublishSingleFile=false `
+              -p:IncludeNativeLibrariesForSelfExtract=false `
+              -o "$env:PUBLISH_OUT"
+          } else {
+            $firstProj = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -Filter *.csproj | Select-Object -First 1
+            if (-not $firstProj) { Write-Error "No .csproj found to publish."; exit 1 }
+            dotnet publish "$($firstProj.FullName)" `
+              -c Release -r win-x64 --self-contained true `
+              -p:DefineConstants=DISABLE_XAML_GENERATED_MAIN `
+              -p:PublishSingleFile=false `
+              -p:IncludeNativeLibrariesForSelfExtract=false `
+              -o "$env:PUBLISH_OUT"
+          }
+
+      
+      
+      
+      
+        
+      
+      
         
       - name: Verify publish output
         shell: pwsh
